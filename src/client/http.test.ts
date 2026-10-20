@@ -1,0 +1,224 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import { BlickdomiAuthError, CloudBlickdomiClient, macFromWindowId } from './http';
+import type { FetchLike } from './http';
+import type { IotPublisher, PublisherFactory } from './iot';
+import type { StateMessage, StateSubscriber, SubscriberFactory } from './state';
+
+const ref = { id: 'AC1101200000AABBCCDDEEFFSOL', homeId: 1, roomId: 1 };
+
+const BUILDINGS = {
+  Remote_Data: {
+    Creator_Buildings: [
+      {
+        Home: {
+          Id_Home: 1,
+          Rooms: [
+            {
+              Room: {
+                Id_Room: 1,
+                Windows: [
+                  {
+                    Window: {
+                      Id_Window: 'AC1101200000AABBCCDDEEFFSOL',
+                      Ip: '192.168.1.50',
+                      Name: 'Living Room',
+                      Firmware: '0.2.1.13',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    ],
+    Associates_Buildings: null,
+    Ack: true,
+    Error: null,
+  },
+};
+
+const CREDS = {
+  Remote_Data: {
+    AccessKey: 'AKIA',
+    SecretAccessKey: 'secret',
+    SessionToken: 'token',
+    Expiration: '2999-01-01T00:00:00Z',
+  },
+};
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+describe('macFromWindowId', () => {
+  it('extracts the colon MAC from a window id', () => {
+    expect(macFromWindowId('AC1101200000AABBCCDDEEFFSOL')).toBe('AA:BB:CC:DD:EE:FF');
+  });
+
+  it('returns empty on an unexpected id', () => {
+    expect(macFromWindowId('nonsense')).toBe('');
+  });
+});
+
+describe('CloudBlickdomiClient', () => {
+  let calls: Array<{ url: string; init?: RequestInit }>;
+  let published: Array<{ topic: string; payload: string }>;
+  let publisherFactory: PublisherFactory;
+  let subscribedFilters: string[];
+  let emitState: ((message: StateMessage) => void) | undefined;
+  let subscriberFactory: SubscriberFactory;
+
+  function clientWith(fetchImpl: FetchLike): CloudBlickdomiClient {
+    return new CloudBlickdomiClient({
+      username: 'u@example.com',
+      password: 'pw',
+      fetchImpl,
+      publisherFactory,
+      subscriberFactory,
+    });
+  }
+
+  function recording(handler: FetchLike): FetchLike {
+    return (url, init) => {
+      calls.push({ url, init });
+      return handler(url, init);
+    };
+  }
+
+  /** Login + AWS creds for any request; buildings/state handled by the caller. */
+  function withAuth(handler: FetchLike): FetchLike {
+    return recording(async (url, init) => {
+      if (url.endsWith('/authentication')) {
+        return json({ Remote_Data: { Pin: 'PIN123' } });
+      }
+      if (url.includes('/aws/credentials')) {
+        return json(CREDS);
+      }
+      return handler(url, init);
+    });
+  }
+
+  beforeEach(() => {
+    calls = [];
+    published = [];
+    subscribedFilters = [];
+    emitState = undefined;
+    const publisher: IotPublisher = {
+      async publish(topic, payload) {
+        published.push({ topic, payload });
+      },
+    };
+    publisherFactory = () => publisher;
+    subscriberFactory = (_creds, _endpoint, _region, onState) => {
+      emitState = onState;
+      const subscriber: StateSubscriber = {
+        subscribe: (filter) => subscribedFilters.push(filter),
+        updateCredentials: () => {},
+        close: () => {},
+      };
+      return subscriber;
+    };
+  });
+
+  it('logs in then lists shutters with the bearer token', async () => {
+    const client = clientWith(withAuth(async () => json(BUILDINGS)));
+
+    const shutters = await client.listShutters();
+
+    expect(shutters).toHaveLength(1);
+    expect(shutters[0]).toMatchObject({
+      id: 'AC1101200000AABBCCDDEEFFSOL',
+      homeId: 1,
+      roomId: 1,
+      name: 'Living Room',
+      mac: 'AA:BB:CC:DD:EE:FF',
+    });
+    const buildingsCall = calls.find((c) => c.url.includes('/users/buildings'));
+    expect(buildingsCall?.init?.headers).toMatchObject({ Authorization: 'Bearer PIN123' });
+  });
+
+  it('publishes up/down/stop to the blind topic via IoT', async () => {
+    const client = clientWith(withAuth(async () => json({})));
+
+    await client.open(ref);
+    await client.close(ref);
+    await client.stop(ref);
+
+    expect(published).toEqual([
+      { topic: '1/AC1101200000AABBCCDDEEFFSOL/blind', payload: '{"op":7}' },
+      { topic: '1/AC1101200000AABBCCDDEEFFSOL/blind', payload: '{"op":8}' },
+      { topic: '1/AC1101200000AABBCCDDEEFFSOL/blind', payload: '{"op":9}' },
+    ]);
+  });
+
+  it('inverts HomeKit position to the device percent-closed arg', async () => {
+    const client = clientWith(withAuth(async () => json({})));
+
+    await client.setPosition(ref, 30); // 30% open -> 70% closed
+
+    expect(published[0]).toEqual({
+      topic: '1/AC1101200000AABBCCDDEEFFSOL/blind',
+      payload: '{"op":63,"args":70}',
+    });
+  });
+
+  it('vends AWS credentials once and reuses the publisher', async () => {
+    const client = clientWith(withAuth(async () => json({})));
+
+    await client.open(ref);
+    await client.close(ref);
+
+    expect(calls.filter((c) => c.url.includes('/aws/credentials'))).toHaveLength(1);
+  });
+
+  it('subscribes to the home topic and dispatches parsed state', async () => {
+    const client = clientWith(withAuth(async () => json({})));
+    const seen: Array<{ windowId: string; position: number }> = [];
+
+    await client.subscribeState(ref.homeId, (windowId, position) =>
+      seen.push({ windowId, position }),
+    );
+
+    expect(subscribedFilters).toEqual(['1/#']);
+    emitState?.({ windowId: ref.id, position: 42 });
+    expect(seen).toEqual([{ windowId: ref.id, position: 42 }]);
+  });
+
+  it('subscribes to a home only once', async () => {
+    const client = clientWith(withAuth(async () => json({})));
+
+    await client.subscribeState(ref.homeId, () => {});
+    await client.subscribeState(ref.homeId, () => {});
+
+    expect(subscribedFilters).toEqual(['1/#']);
+  });
+
+  it('re-authenticates once on an invalid-token envelope', async () => {
+    let buildingsCalls = 0;
+    const client = clientWith(
+      recording(async (url) => {
+        if (url.endsWith('/authentication')) {
+          return json({ Remote_Data: { Pin: 'PIN' } });
+        }
+        buildingsCalls += 1;
+        if (buildingsCalls === 1) {
+          return json({ errors: [{ message: 'Invalid Access Token' }] });
+        }
+        return json(BUILDINGS);
+      }),
+    );
+
+    await expect(client.listShutters()).resolves.toHaveLength(1);
+    expect(buildingsCalls).toBe(2);
+  });
+
+  it('raises an auth error when login returns no Pin', async () => {
+    const client = clientWith(async () => json({ Remote_Data: { Ack: false } }));
+    await expect(client.listShutters()).rejects.toBeInstanceOf(BlickdomiAuthError);
+  });
+});

@@ -1,0 +1,41 @@
+{
+  "pluginAlias": "Blickdomi",
+  "pluginType": "platform",
+  "singular": true,
+  "headerDisplay": "Control BlickDomi Sentry shutters via the mySmartWindow cloud.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "Blickdomi",
+        "required": true
+      },
+      "username": {
+        "title": "Account email",
+        "type": "string",
+        "format": "email",
+        "required": true
+      },
+      "password": {
+        "title": "Account password",
+        "type": "string",
+        "required": true,
+        "x-schema-form": { "type": "password" }
+      },
+      "port": {
+        "title": "API port",
+        "type": "integer",
+        "default": 22222
+      },
+      "fullTravelSeconds": {
+        "title": "Full travel time (seconds)",
+        "description": "Approximate time to move fully open to closed; used to estimate position.",
+        "type": "integer",
+        "default": 20,
+        "minimum": 1
+      }
+    }
+  }
+}
