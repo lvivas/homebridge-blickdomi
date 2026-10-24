@@ -38,7 +38,7 @@
       },
       "sensorStaleMinutes": {
         "title": "Sensor stale timeout (minutes)",
-        "description": "If greater than 0, a sensor shows No Response when it hasn't reported for this long. Sensors always start as No Response until their first reading. Keep generous — readings arrive only every few minutes.",
+        "description": "If greater than 0, sensors show No Response when the device sends no readings at all for this long (whole-device silence, not per-sensor, so slow sensors don't flap). Sensors start as No Response until their first reading.",
         "type": "integer",
         "default": 0,
         "minimum": 0

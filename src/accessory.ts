@@ -25,7 +25,8 @@ export class ShutterAccessory {
   private humService?: Service;
   private co2Service?: Service;
   private readonly channels: SensorChannel[] = [];
-  private readonly lastReading = new Map<keyof StateReadings, number>();
+  /** Most recent timestamp of any sensor reading, for whole-device staleness. */
+  private lastAnyReading = 0;
 
   constructor(
     private readonly platform: BlickdomiPlatform,
@@ -174,12 +175,14 @@ export class ShutterAccessory {
   }
 
   private markStaleSensors(staleMs: number): void {
-    const now = Date.now();
+    // Only when the device goes fully silent (no reading of any metric), so an
+    // individual sensor's slow report cadence never flaps it to No Response.
+    const silent = this.lastAnyReading === 0 || Date.now() - this.lastAnyReading > staleMs;
+    if (!silent) {
+      return;
+    }
     for (const channel of this.channels) {
-      const last = this.lastReading.get(channel.metric);
-      if (last === undefined || now - last > staleMs) {
-        channel.service.updateCharacteristic(channel.characteristic, this.noResponse());
-      }
+      channel.service.updateCharacteristic(channel.characteristic, this.noResponse());
     }
   }
 
@@ -242,7 +245,7 @@ export class ShutterAccessory {
       default:
         return;
     }
-    this.lastReading.set(metric, ts);
+    this.lastAnyReading = Math.max(this.lastAnyReading, ts);
     const cache = this.readingCache();
     cache[metric] = { value, ts };
     this.accessory.context.sensors = cache;
