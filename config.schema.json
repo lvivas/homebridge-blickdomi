@@ -36,13 +36,6 @@
         "default": 20,
         "minimum": 1
       },
-      "sensorStaleMinutes": {
-        "title": "Sensor stale timeout (minutes)",
-        "description": "If greater than 0, sensors show No Response when the device sends no readings at all for this long (whole-device silence, not per-sensor, so slow sensors don't flap). Sensors start as No Response until their first reading.",
-        "type": "integer",
-        "default": 0,
-        "minimum": 0
-      },
       "enableReachability": {
         "title": "Mark offline shutters as No Response (experimental)",
         "description": "Uses the cloud Active flag, whose meaning is not fully verified; may wrongly flag working shutters. Off by default.",

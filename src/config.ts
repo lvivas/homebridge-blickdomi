@@ -22,8 +22,6 @@ export interface BlickdomiPlatformConfig extends PlatformConfig {
   enableReachability?: boolean;
   /** Expose air-quality/CO2/temperature/humidity sensors (experimental; default off). */
   exposeSensors?: boolean;
-  /** If > 0, mark a sensor "No Response" when it hasn't reported for this many minutes. */
-  sensorStaleMinutes?: number;
   /** How often to poll window reachability (seconds). */
   reachabilityPollSeconds?: number;
   /** If > 0, treat a window offline when Last_Connection is this many minutes old. */

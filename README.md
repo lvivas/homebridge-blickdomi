@@ -66,31 +66,28 @@ Add the platform via the Homebridge UI (a settings form is provided) or in
 }
 ```
 
-| Option                    | Required | Default | Description                                                                      |
-| ------------------------- | -------- | ------- | -------------------------------------------------------------------------------- |
-| `username`                | yes      | —       | Your mySmartWindow account email.                                                |
-| `password`                | yes      | —       | Your account password (stored in `config.json` in cleartext).                    |
-| `port`                    | no       | 22222   | API port.                                                                        |
-| `fullTravelSeconds`       | no       | 20      | Full open↔close travel time; smooths the position estimate.                      |
-| `exposeSensors`           | no       | true    | Expose air-quality/CO₂/temperature/humidity sensors on capable shutters.         |
-| `sensorStaleMinutes`      | no       | 0       | If > 0, show No Response when the device sends no readings at all for this long. |
-| `enableReachability`      | no       | false   | Mark unreachable shutters as "No Response" (experimental).                       |
-| `reachabilityPollSeconds` | no       | 180     | How often to check reachability (only when enableReachability).                  |
-| `offlineStaleMinutes`     | no       | 0       | If > 0, also treat a shutter offline when its last contact is this stale.        |
-| `devices`                 | no       | —       | Per-device sensor on/off overrides (see below).                                  |
+| Option                    | Required | Default | Description                                                               |
+| ------------------------- | -------- | ------- | ------------------------------------------------------------------------- |
+| `username`                | yes      | —       | Your mySmartWindow account email.                                         |
+| `password`                | yes      | —       | Your account password (stored in `config.json` in cleartext).             |
+| `port`                    | no       | 22222   | API port.                                                                 |
+| `fullTravelSeconds`       | no       | 20      | Full open↔close travel time; smooths the position estimate.               |
+| `exposeSensors`           | no       | true    | Expose air-quality/CO₂/temperature/humidity sensors on capable shutters.  |
+| `enableReachability`      | no       | false   | Mark unreachable shutters as "No Response" (experimental).                |
+| `reachabilityPollSeconds` | no       | 180     | How often to check reachability (only when enableReachability).           |
+| `offlineStaleMinutes`     | no       | 0       | If > 0, also treat a shutter offline when its last contact is this stale. |
+| `devices`                 | no       | —       | Per-device sensor on/off overrides (see below).                           |
 
 ### Sensors
 
 On by default for shutters that have the module (e.g. Sentry). The device
 publishes readings on its own every few minutes (temperature, humidity, CO₂, VOC,
-IAQ). Each sensor shows **No Response** until its first reading arrives, so a
-sensor the device never reports stays clearly non-responsive instead of showing a
-fake 0. The last readings are remembered across Homebridge restarts and shown
+IAQ). The last readings are remembered across Homebridge restarts and shown
 immediately on startup (the cloud has no fetchable sensor values, so this mirrors
-how the app caches). Set `sensorStaleMinutes` to show No Response when the device
-goes fully silent (no reading of any metric) for that long — it's whole-device,
-not per-sensor, so a slow individual sensor never flaps to No Response between its
-reports.
+how the app caches); a metric shows its HomeKit default until its first reading
+arrives. Sensors are never marked "No Response" — they share the shutter
+accessory, and a sensor in No Response alongside the responding shutter makes
+HomeKit flap the whole tile.
 
 Set `exposeSensors: false` to disable sensors globally, or force a sensor on/off
 for a specific shutter with a `devices` entry (matched by name or window id),

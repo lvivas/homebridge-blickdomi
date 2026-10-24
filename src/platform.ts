@@ -20,7 +20,6 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
   public readonly client: BlickdomiClient;
   public readonly fullTravelSeconds: number;
   public readonly exposeSensors: boolean;
-  public readonly sensorStaleMs: number;
   private readonly enableReachability: boolean;
   private readonly reachabilityPollSeconds: number;
   private readonly deviceConfigs: DeviceConfig[];
@@ -38,7 +37,6 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
     const cfg = config as BlickdomiPlatformConfig;
     this.fullTravelSeconds = cfg.fullTravelSeconds ?? 20;
     this.exposeSensors = cfg.exposeSensors ?? true;
-    this.sensorStaleMs = Math.max(0, cfg.sensorStaleMinutes ?? 0) * 60_000;
     this.enableReachability = cfg.enableReachability ?? false;
     this.reachabilityPollSeconds = cfg.reachabilityPollSeconds ?? 180;
     this.deviceConfigs = cfg.devices ?? [];

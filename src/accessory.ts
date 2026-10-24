@@ -1,4 +1,4 @@
-import type { Characteristic, PlatformAccessory, Service, WithUUID } from 'homebridge';
+import type { PlatformAccessory, Service } from 'homebridge';
 
 import type { BlickdomiPlatform } from './platform';
 import type { SensorKind } from './config';
@@ -6,16 +6,7 @@ import type { Shutter, StateReadings } from './client/types';
 import { co2Detected, iaqToAirQuality } from './control/airquality';
 import { ShutterController } from './control/shutterController';
 
-type CharacteristicRef = WithUUID<new () => Characteristic>;
-
-/** One sensor characteristic that shows "No Response" until/unless it has data. */
-interface SensorChannel {
-  service: Service;
-  characteristic: CharacteristicRef;
-  metric: keyof StateReadings;
-}
-
-/** Binds one shutter's WindowCovering (and optional sensor) services. */
+/** Binds one shutter's WindowCovering and its optional sensor services. */
 export class ShutterAccessory {
   private readonly service: Service;
   private readonly controller: ShutterController;
@@ -24,9 +15,6 @@ export class ShutterAccessory {
   private tempService?: Service;
   private humService?: Service;
   private co2Service?: Service;
-  private readonly channels: SensorChannel[] = [];
-  /** Most recent timestamp of any sensor reading, for whole-device staleness. */
-  private lastAnyReading = 0;
 
   constructor(
     private readonly platform: BlickdomiPlatform,
@@ -127,34 +115,12 @@ export class ShutterAccessory {
       drop(Service.CarbonDioxideSensor, 'co2');
     }
 
-    const { Characteristic } = this.platform;
-    this.channels.length = 0;
-    const track = (
-      service: Service | undefined,
-      characteristic: CharacteristicRef,
-      metric: keyof StateReadings,
-    ): void => {
-      if (service) {
-        this.channels.push({ service, characteristic, metric });
-      }
-    };
-    track(this.tempService, Characteristic.CurrentTemperature, 'temperatureC');
-    track(this.humService, Characteristic.CurrentRelativeHumidity, 'humidity');
-    track(this.airService, Characteristic.AirQuality, 'iaq');
-    track(this.co2Service, Characteristic.CarbonDioxideLevel, 'co2Ppm');
-
-    // Seed from the last persisted readings (like the app's local cache);
-    // otherwise show "No Response" until a real reading arrives.
-    const staleMs = this.platform.sensorStaleMs;
+    // Seed from the last persisted readings (like the app's local cache). No
+    // "No Response" for not-yet-seen metrics: a sensor in No Response alongside
+    // the responding shutter makes HomeKit flap the whole accessory.
     const cache = this.readingCache();
-    const now = Date.now();
-    for (const channel of this.channels) {
-      const cached = cache[channel.metric];
-      if (cached && (staleMs <= 0 || now - cached.ts <= staleMs)) {
-        this.applyReading(channel.metric, cached.value, cached.ts);
-      } else {
-        channel.service.updateCharacteristic(channel.characteristic, this.noResponse());
-      }
+    for (const metric of Object.keys(cache) as (keyof StateReadings)[]) {
+      this.applyReading(metric, cache[metric]);
     }
 
     this.platform.log.info(
@@ -162,58 +128,39 @@ export class ShutterAccessory {
         `airQuality=${!!this.airService} temperature=${!!this.tempService} ` +
         `humidity=${!!this.humService} co2=${!!this.co2Service}`,
     );
-
-    if (staleMs > 0 && this.channels.length > 0) {
-      setInterval(() => this.markStaleSensors(staleMs), 60_000).unref?.();
-    }
   }
 
-  private readingCache(): Record<string, { value: number; ts: number }> {
+  private readingCache(): Partial<Record<keyof StateReadings, number>> {
     const cache = this.accessory.context.sensors as
-      Record<string, { value: number; ts: number }> | undefined;
+      Partial<Record<keyof StateReadings, number>> | undefined;
     return cache && typeof cache === 'object' ? cache : {};
-  }
-
-  private markStaleSensors(staleMs: number): void {
-    // Only when the device goes fully silent (no reading of any metric), so an
-    // individual sensor's slow report cadence never flaps it to No Response.
-    const silent = this.lastAnyReading === 0 || Date.now() - this.lastAnyReading > staleMs;
-    if (!silent) {
-      return;
-    }
-    for (const channel of this.channels) {
-      channel.service.updateCharacteristic(channel.characteristic, this.noResponse());
-    }
   }
 
   /** Feed device-reported readings (from the MQTT state subscription). */
   report(readings: StateReadings): void {
-    this.platform.log.debug(`report ${JSON.stringify(readings)}`);
     this.setReachable(true); // any state push is proof of life
     if (readings.position !== undefined) {
       this.controller.onReported(readings.position);
     }
-    this.updateSensors(readings);
-  }
-
-  private updateSensors(readings: StateReadings): void {
-    const now = Date.now();
     if (readings.temperatureC !== undefined) {
-      this.applyReading('temperatureC', readings.temperatureC, now);
+      this.applyReading('temperatureC', readings.temperatureC);
     }
     if (readings.humidity !== undefined) {
-      this.applyReading('humidity', readings.humidity, now);
+      this.applyReading('humidity', readings.humidity);
     }
     if (readings.iaq !== undefined) {
-      this.applyReading('iaq', readings.iaq, now);
+      this.applyReading('iaq', readings.iaq);
     }
     if (readings.co2Ppm !== undefined) {
-      this.applyReading('co2Ppm', readings.co2Ppm, now);
+      this.applyReading('co2Ppm', readings.co2Ppm);
     }
   }
 
   /** Push one reading to its HomeKit characteristic and persist it for restart. */
-  private applyReading(metric: keyof StateReadings, value: number, ts: number): void {
+  private applyReading(metric: keyof StateReadings, value: number | undefined): void {
+    if (value === undefined) {
+      return;
+    }
     const { Characteristic } = this.platform;
     switch (metric) {
       case 'temperatureC':
@@ -245,13 +192,12 @@ export class ShutterAccessory {
       default:
         return;
     }
-    this.lastAnyReading = Math.max(this.lastAnyReading, ts);
     const cache = this.readingCache();
-    cache[metric] = { value, ts };
+    cache[metric] = value;
     this.accessory.context.sensors = cache;
   }
 
-  /** Mark the accessory reachable/unreachable; offline shows as "No Response". */
+  /** Mark the covering reachable/unreachable; offline shows as "No Response". */
   setReachable(online: boolean): void {
     if (online === this.online) {
       return;
