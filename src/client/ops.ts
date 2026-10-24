@@ -1,10 +1,15 @@
 /** Device operation codes. */
 export const Op = {
+  TEMP: 4,
+  HUMEDAD: 5,
   /** Read/report blind position (percent closed). Used for state, not control. */
   POSITION_BLIND: 6,
   UP: 7,
   DOWN: 8,
   STOP: 9,
+  CO2: 58,
+  VOC: 59,
+  IAQ: 71,
   /** Move to an absolute position; args = percent closed (0 open … 100 closed). */
   BLIND_UNIT: 63,
 } as const;

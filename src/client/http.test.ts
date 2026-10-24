@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { BlickdomiAuthError, CloudBlickdomiClient, macFromWindowId } from './http';
+import { BlickdomiAuthError, CloudBlickdomiClient, isWindowOnline, macFromWindowId } from './http';
 import type { FetchLike } from './http';
 import type { IotPublisher, PublisherFactory } from './iot';
 import type { StateMessage, StateSubscriber, SubscriberFactory } from './state';
@@ -62,6 +62,35 @@ describe('macFromWindowId', () => {
 
   it('returns empty on an unexpected id', () => {
     expect(macFromWindowId('nonsense')).toBe('');
+  });
+});
+
+describe('isWindowOnline', () => {
+  // Parsed in the same local format as Last_Connection, so the test is TZ-independent.
+  const now = Date.parse('2026-10-21 12:00:00');
+
+  it('is offline when Active is 0', () => {
+    expect(isWindowOnline(0, undefined, 0, now)).toBe(false);
+  });
+
+  it('is online when Active is 1', () => {
+    expect(isWindowOnline(1, undefined, 0, now)).toBe(true);
+  });
+
+  it('treats missing fields as online (never a false offline)', () => {
+    expect(isWindowOnline(undefined, undefined, 0, now)).toBe(true);
+  });
+
+  it('ignores staleness when the threshold is 0', () => {
+    expect(isWindowOnline(1, '2020-01-01 00:00:00', 0, now)).toBe(true);
+  });
+
+  it('is offline when Last_Connection is older than the stale window', () => {
+    expect(isWindowOnline(1, '2026-10-21 10:00:00', 30 * 60_000, now)).toBe(false);
+  });
+
+  it('is online when Last_Connection is within the stale window', () => {
+    expect(isWindowOnline(1, '2026-10-21 11:50:00', 30 * 60_000, now)).toBe(true);
   });
 });
 
@@ -176,17 +205,48 @@ describe('CloudBlickdomiClient', () => {
     expect(calls.filter((c) => c.url.includes('/aws/credentials'))).toHaveLength(1);
   });
 
-  it('subscribes to the home topic and dispatches parsed state', async () => {
+  it('subscribes to the home topic and dispatches parsed readings', async () => {
     const client = clientWith(withAuth(async () => json({})));
-    const seen: Array<{ windowId: string; position: number }> = [];
+    const seen: Array<{ windowId: string; position?: number }> = [];
 
-    await client.subscribeState(ref.homeId, (windowId, position) =>
-      seen.push({ windowId, position }),
+    await client.subscribeState(ref.homeId, (windowId, readings) =>
+      seen.push({ windowId, position: readings.position }),
     );
 
     expect(subscribedFilters).toEqual(['1/#']);
-    emitState?.({ windowId: ref.id, position: 42 });
+    emitState?.({ windowId: ref.id, readings: { position: 42 } });
     expect(seen).toEqual([{ windowId: ref.id, position: 42 }]);
+  });
+
+  it('reports per-window reachability from the Active flag', async () => {
+    const buildings = {
+      Remote_Data: {
+        Creator_Buildings: [
+          {
+            Home: {
+              Id_Home: 1,
+              Rooms: [
+                {
+                  Room: {
+                    Id_Room: 1,
+                    Windows: [
+                      { Window: { Id_Window: 'WIN-ON', Active: 1 } },
+                      { Window: { Id_Window: 'WIN-OFF', Active: 0 } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        Ack: true,
+      },
+    };
+    const client = clientWith(withAuth(async () => json(buildings)));
+
+    const reachable = await client.getReachability(1);
+    expect(reachable.get('WIN-ON')).toBe(true);
+    expect(reachable.get('WIN-OFF')).toBe(false);
   });
 
   it('subscribes to a home only once', async () => {

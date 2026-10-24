@@ -35,6 +35,54 @@
         "type": "integer",
         "default": 20,
         "minimum": 1
+      },
+      "sensorStaleMinutes": {
+        "title": "Sensor stale timeout (minutes)",
+        "description": "If greater than 0, a sensor shows No Response when it hasn't reported for this long. Sensors always start as No Response until their first reading. Keep generous — readings arrive only every few minutes.",
+        "type": "integer",
+        "default": 0,
+        "minimum": 0
+      },
+      "enableReachability": {
+        "title": "Mark offline shutters as No Response (experimental)",
+        "description": "Uses the cloud Active flag, whose meaning is not fully verified; may wrongly flag working shutters. Off by default.",
+        "type": "boolean",
+        "default": false
+      },
+      "exposeSensors": {
+        "title": "Expose air quality / CO2 / temperature / humidity",
+        "description": "Exposes sensors on shutters that have the module (e.g. Sentry). Readings arrive every few minutes, so tiles may show 0 briefly after startup.",
+        "type": "boolean",
+        "default": true
+      },
+      "reachabilityPollSeconds": {
+        "title": "Reachability poll interval (seconds)",
+        "description": "How often to check whether each shutter is online (only when reachability is enabled).",
+        "type": "integer",
+        "default": 180,
+        "minimum": 30
+      },
+      "offlineStaleMinutes": {
+        "title": "Stale-connection offline threshold (minutes)",
+        "description": "If greater than 0, also mark a shutter offline when its last contact is older than this. Leave at 0 unless you have confirmed the device reports in regularly, or idle shutters may show as offline.",
+        "type": "integer",
+        "default": 0,
+        "minimum": 0
+      },
+      "devices": {
+        "title": "Per-device sensor overrides",
+        "description": "Turn individual sensors on or off for a shutter. Leave a sensor unset to expose it automatically when the shutter supports it.",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": { "title": "Shutter name (or window id)", "type": "string", "required": true },
+            "airQuality": { "title": "Air quality", "type": "boolean" },
+            "temperature": { "title": "Temperature", "type": "boolean" },
+            "humidity": { "title": "Humidity", "type": "boolean" },
+            "co2": { "title": "CO2", "type": "boolean" }
+          }
+        }
       }
     }
   }

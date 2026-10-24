@@ -11,7 +11,7 @@ import type {
 import { ShutterAccessory } from './accessory';
 import { CloudBlickdomiClient } from './client/http';
 import type { BlickdomiClient, Shutter } from './client/types';
-import type { BlickdomiPlatformConfig } from './config';
+import type { BlickdomiPlatformConfig, DeviceConfig, SensorKind } from './config';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 
 export class BlickdomiPlatform implements DynamicPlatformPlugin {
@@ -19,6 +19,11 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
   public readonly Characteristic: typeof Characteristic;
   public readonly client: BlickdomiClient;
   public readonly fullTravelSeconds: number;
+  public readonly exposeSensors: boolean;
+  public readonly sensorStaleMs: number;
+  private readonly enableReachability: boolean;
+  private readonly reachabilityPollSeconds: number;
+  private readonly deviceConfigs: DeviceConfig[];
 
   private readonly cachedAccessories: PlatformAccessory[] = [];
 
@@ -32,10 +37,16 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
 
     const cfg = config as BlickdomiPlatformConfig;
     this.fullTravelSeconds = cfg.fullTravelSeconds ?? 20;
+    this.exposeSensors = cfg.exposeSensors ?? true;
+    this.sensorStaleMs = Math.max(0, cfg.sensorStaleMinutes ?? 0) * 60_000;
+    this.enableReachability = cfg.enableReachability ?? false;
+    this.reachabilityPollSeconds = cfg.reachabilityPollSeconds ?? 180;
+    this.deviceConfigs = cfg.devices ?? [];
     this.client = new CloudBlickdomiClient({
       username: cfg.username ?? '',
       password: cfg.password ?? '',
       port: cfg.port,
+      offlineStaleMinutes: cfg.offlineStaleMinutes,
       log: (message) => this.log.debug(message),
     });
 
@@ -44,6 +55,12 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
         this.log.error('Discovery failed:', (error as Error).message);
       });
     });
+  }
+
+  /** Per-device sensor override from config (by name or window id); undefined = auto. */
+  sensorOverride(shutter: Shutter, kind: SensorKind): boolean | undefined {
+    const match = this.deviceConfigs.find((d) => d.name === shutter.name || d.name === shutter.id);
+    return match?.[kind];
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
@@ -90,12 +107,38 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
 
     for (const homeId of homeIds) {
       try {
-        await this.client.subscribeState(homeId, (windowId, position) => {
-          handlers.get(windowId)?.report(position);
+        await this.client.subscribeState(homeId, (windowId, readings) => {
+          handlers.get(windowId)?.report(readings);
         });
       } catch (error) {
         this.log.warn(`Live state unavailable for home ${homeId}:`, (error as Error).message);
       }
     }
+
+    if (this.enableReachability) {
+      this.startReachabilityPolling(homeIds, handlers);
+    }
+  }
+
+  private startReachabilityPolling(
+    homeIds: Set<number>,
+    handlers: Map<string, ShutterAccessory>,
+  ): void {
+    const poll = async (): Promise<void> => {
+      for (const homeId of homeIds) {
+        try {
+          const reachable = await this.client.getReachability(homeId);
+          for (const [windowId, online] of reachable) {
+            handlers.get(windowId)?.setReachable(online);
+          }
+        } catch (error) {
+          this.log.debug(
+            `Reachability poll failed for home ${homeId}: ${(error as Error).message}`,
+          );
+        }
+      }
+    };
+    void poll();
+    setInterval(() => void poll(), this.reachabilityPollSeconds * 1000).unref?.();
   }
 }

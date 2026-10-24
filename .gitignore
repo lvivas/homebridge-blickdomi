@@ -3,3 +3,5 @@ dist/
 coverage/
 *.tgz
 .DS_Store
+aq-capture.mjs
+*.local.mjs

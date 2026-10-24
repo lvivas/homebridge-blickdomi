@@ -8,6 +8,10 @@
  * The device's inverted percent-closed scale is hidden inside the client.
  */
 
+import type { StateReadings } from './state';
+
+export type { StateReadings };
+
 /** A shutter as returned by the cloud `users/buildings` call. */
 export interface Shutter {
   /** Cloud window id, e.g. `AC1101200000AABBCCDDEEFFSOL`. */
@@ -19,6 +23,8 @@ export interface Shutter {
   /** Derived from the window id (`AC1101200000<mac>SOL`). */
   readonly mac: string;
   readonly firmware?: string;
+  /** Capability codes from the cloud (e.g. S2 = temp/hum/IAQ, S7 = CO₂/VOC). */
+  readonly services: string[];
 }
 
 /** The identifiers a command needs to address one shutter. */
@@ -45,6 +51,8 @@ export interface BlickdomiClient {
    */
   subscribeState(
     homeId: number,
-    onState: (windowId: string, position: number) => void,
+    onState: (windowId: string, readings: StateReadings) => void,
   ): Promise<void>;
+  /** Per-window reachability for a home: windowId → true when online. */
+  getReachability(homeId: number): Promise<Map<string, boolean>>;
 }

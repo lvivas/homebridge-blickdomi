@@ -5,7 +5,12 @@ import {
   type PublisherFactory,
 } from './iot';
 import { Op, toDeviceArgs } from './ops';
-import { awsIotSubscriberFactory, type StateSubscriber, type SubscriberFactory } from './state';
+import {
+  awsIotSubscriberFactory,
+  type StateReadings,
+  type StateSubscriber,
+  type SubscriberFactory,
+} from './state';
 import type { BlickdomiClient, Shutter, ShutterRef } from './types';
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
@@ -26,6 +31,8 @@ export interface HttpClientOptions {
   fetchImpl?: FetchLike;
   publisherFactory?: PublisherFactory;
   subscriberFactory?: SubscriberFactory;
+  /** If > 0, also treat a window as offline when Last_Connection is this old. */
+  offlineStaleMinutes?: number;
   log?: (message: string) => void;
 }
 
@@ -66,6 +73,9 @@ interface WindowNode {
   Ip?: string;
   Name?: string;
   Firmware?: string;
+  Active?: number;
+  Last_Connection?: string;
+  Services?: string[];
 }
 
 interface CachedCreds {
@@ -82,6 +92,29 @@ export function macFromWindowId(id: string): string {
     return '';
   }
   return (hex.match(/../g) ?? []).join(':').toUpperCase();
+}
+
+/**
+ * Online unless the cloud explicitly marks it inactive, or (when a stale window
+ * is configured) its last contact is older than that window. Missing/unparseable
+ * fields are treated as online, so a shutter is never wrongly flagged offline.
+ */
+export function isWindowOnline(
+  active: number | undefined,
+  lastConnection: string | undefined,
+  staleMs: number,
+  now: number,
+): boolean {
+  if (active === 0) {
+    return false;
+  }
+  if (staleMs > 0 && lastConnection) {
+    const last = Date.parse(lastConnection);
+    if (!Number.isNaN(last) && now - last > staleMs) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export class BlickdomiAuthError extends Error {}
@@ -142,6 +175,7 @@ export class CloudBlickdomiClient implements BlickdomiClient {
             ip: win.Ip ?? '',
             mac: macFromWindowId(win.Id_Window),
             firmware: win.Firmware,
+            services: win.Services ?? [],
           });
         }
       }
@@ -167,7 +201,7 @@ export class CloudBlickdomiClient implements BlickdomiClient {
 
   async subscribeState(
     homeId: number,
-    onState: (windowId: string, position: number) => void,
+    onState: (windowId: string, readings: StateReadings) => void,
   ): Promise<void> {
     if (this.subscriptions.has(homeId)) {
       return;
@@ -181,12 +215,40 @@ export class CloudBlickdomiClient implements BlickdomiClient {
       },
       this.iotEndpoint,
       this.iotRegion,
-      (message) => onState(message.windowId, message.position),
+      (message) => onState(message.windowId, message.readings),
       (error) => this.log(`state subscription error: ${error.message}`),
     );
     subscriber.subscribe(`${homeId}/#`);
     this.subscriptions.set(homeId, subscriber);
     this.scheduleCredentialRefresh(homeId, subscriber, creds.expiresAt);
+  }
+
+  async getReachability(homeId: number): Promise<Map<string, boolean>> {
+    const env = await this.authed<BuildingsData>('/users/buildings?device_token=');
+    const nodes = [
+      ...(env.Remote_Data?.Creator_Buildings ?? []),
+      ...(env.Remote_Data?.Associates_Buildings ?? []),
+    ];
+    const staleMs = (this.options.offlineStaleMinutes ?? 0) * 60_000;
+    const now = Date.now();
+    const reachable = new Map<string, boolean>();
+    for (const node of nodes) {
+      if (node.Home?.Id_Home !== homeId) {
+        continue;
+      }
+      for (const roomWrap of node.Home.Rooms ?? []) {
+        for (const windowWrap of roomWrap.Room?.Windows ?? []) {
+          const win = windowWrap.Window;
+          if (win?.Id_Window) {
+            reachable.set(
+              win.Id_Window,
+              isWindowOnline(win.Active, win.Last_Connection, staleMs, now),
+            );
+          }
+        }
+      }
+    }
+    return reachable;
   }
 
   /**
