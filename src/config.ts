@@ -20,8 +20,13 @@ export interface BlickdomiPlatformConfig extends PlatformConfig {
   fullTravelSeconds?: number;
   /** Mark unreachable shutters as "No Response" (experimental; default off). */
   enableReachability?: boolean;
-  /** Expose air-quality/CO2/temperature/humidity sensors (experimental; default off). */
+  /** Master switch for all sensors (default on). */
   exposeSensors?: boolean;
+  /** Global per-sensor switches (each default on); per-device `devices` overrides win. */
+  exposeAirQuality?: boolean;
+  exposeCo2?: boolean;
+  exposeTemperature?: boolean;
+  exposeHumidity?: boolean;
   /** How often to poll window reachability (seconds). */
   reachabilityPollSeconds?: number;
   /** If > 0, treat a window offline when Last_Connection is this many minutes old. */

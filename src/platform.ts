@@ -20,6 +20,7 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
   public readonly client: BlickdomiClient;
   public readonly fullTravelSeconds: number;
   public readonly exposeSensors: boolean;
+  public readonly sensorDefaults: Record<SensorKind, boolean>;
   private readonly enableReachability: boolean;
   private readonly reachabilityPollSeconds: number;
   private readonly deviceConfigs: DeviceConfig[];
@@ -37,6 +38,12 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
     const cfg = config as BlickdomiPlatformConfig;
     this.fullTravelSeconds = cfg.fullTravelSeconds ?? 20;
     this.exposeSensors = cfg.exposeSensors ?? true;
+    this.sensorDefaults = {
+      airQuality: cfg.exposeAirQuality ?? true,
+      co2: cfg.exposeCo2 ?? true,
+      temperature: cfg.exposeTemperature ?? true,
+      humidity: cfg.exposeHumidity ?? true,
+    };
     this.enableReachability = cfg.enableReachability ?? false;
     this.reachabilityPollSeconds = cfg.reachabilityPollSeconds ?? 180;
     this.deviceConfigs = cfg.devices ?? [];

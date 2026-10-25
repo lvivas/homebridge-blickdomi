@@ -43,8 +43,28 @@
         "default": false
       },
       "exposeSensors": {
-        "title": "Expose air quality / CO2 / temperature / humidity",
+        "title": "Expose sensors (master switch)",
         "description": "Exposes sensors on shutters that have the module (e.g. Sentry). Readings arrive every few minutes, so tiles may show 0 briefly after startup.",
+        "type": "boolean",
+        "default": true
+      },
+      "exposeAirQuality": {
+        "title": "Air quality sensor",
+        "type": "boolean",
+        "default": true
+      },
+      "exposeCo2": {
+        "title": "CO2 sensor",
+        "type": "boolean",
+        "default": true
+      },
+      "exposeTemperature": {
+        "title": "Temperature sensor",
+        "type": "boolean",
+        "default": true
+      },
+      "exposeHumidity": {
+        "title": "Humidity sensor",
         "type": "boolean",
         "default": true
       },

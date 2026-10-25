@@ -78,7 +78,8 @@ export class ShutterAccessory {
     const { Service } = this.platform;
     const has = (code: string): boolean => shutter.services.includes(code);
     const enabled = (kind: SensorKind, capable: boolean): boolean =>
-      this.platform.sensorOverride(shutter, kind) ?? (this.platform.exposeSensors && capable);
+      this.platform.sensorOverride(shutter, kind) ??
+      (this.platform.exposeSensors && this.platform.sensorDefaults[kind] && capable);
 
     const ensure = (
       type: typeof Service.TemperatureSensor,

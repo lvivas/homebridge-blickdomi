@@ -89,9 +89,11 @@ arrives. Sensors are never marked "No Response" — they share the shutter
 accessory, and a sensor in No Response alongside the responding shutter makes
 HomeKit flap the whole tile.
 
-Set `exposeSensors: false` to disable sensors globally, or force a sensor on/off
-for a specific shutter with a `devices` entry (matched by name or window id),
-which overrides `exposeSensors`:
+Turn individual sensor types off globally with `exposeAirQuality`, `exposeCo2`,
+`exposeTemperature`, `exposeHumidity` (each default `true`) — e.g. the
+temperature/humidity readings are coarse, so you may want just CO₂ and air
+quality. `exposeSensors: false` disables all sensors. A `devices` entry (matched
+by name or window id) overrides everything for one shutter:
 
 ```json
 "devices": [
