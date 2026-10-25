@@ -7,6 +7,8 @@ export const Op = {
   UP: 7,
   DOWN: 8,
   STOP: 9,
+  /** Ask the device to publish a full sensor report on its environmentals topic. */
+  SENSORS: 62,
   CO2: 58,
   VOC: 59,
   IAQ: 71,

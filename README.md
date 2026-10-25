@@ -82,12 +82,12 @@ Add the platform via the Homebridge UI (a settings form is provided) or in
 
 On by default for shutters that have the module (e.g. Sentry). The device
 publishes readings on its own every few minutes (temperature, humidity, CO₂, VOC,
-IAQ). The last readings are remembered across Homebridge restarts and shown
-immediately on startup (the cloud has no fetchable sensor values, so this mirrors
-how the app caches); a metric shows its HomeKit default until its first reading
-arrives. Sensors are never marked "No Response" — they share the shutter
-accessory, and a sensor in No Response alongside the responding shutter makes
-HomeKit flap the whole tile.
+IAQ). The plugin asks each shutter for a fresh reading at startup and every
+`sensorPollSeconds` (default 300; 0 = startup only), and also catches the device's
+own periodic pushes — so values populate within seconds of launch and stay
+current. Last readings are remembered across restarts. Sensors are never marked
+"No Response" — they share the shutter accessory, and a sensor in No Response
+alongside the responding shutter would make HomeKit flap the whole tile.
 
 Turn individual sensor types off globally with `exposeAirQuality`, `exposeCo2`,
 `exposeTemperature`, `exposeHumidity` (each default `true`) — e.g. the

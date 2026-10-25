@@ -74,6 +74,13 @@
         "type": "number",
         "default": 0
       },
+      "sensorPollSeconds": {
+        "title": "Sensor refresh interval (seconds)",
+        "description": "How often to ask each shutter for a fresh sensor reading. 0 = only at startup.",
+        "type": "integer",
+        "default": 300,
+        "minimum": 0
+      },
       "reachabilityPollSeconds": {
         "title": "Reachability poll interval (seconds)",
         "description": "How often to check whether each shutter is online (only when reachability is enabled).",

@@ -21,6 +21,7 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
   public readonly fullTravelSeconds: number;
   public readonly exposeSensors: boolean;
   public readonly sensorDefaults: Record<SensorKind, boolean>;
+  private readonly sensorPollSeconds: number;
   private readonly enableReachability: boolean;
   private readonly reachabilityPollSeconds: number;
   private readonly deviceConfigs: DeviceConfig[];
@@ -49,6 +50,7 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
     this.reachabilityPollSeconds = cfg.reachabilityPollSeconds ?? 180;
     this.deviceConfigs = cfg.devices ?? [];
     this.globalTemperatureOffset = cfg.temperatureOffset ?? 0;
+    this.sensorPollSeconds = cfg.sensorPollSeconds ?? 300;
     this.client = new CloudBlickdomiClient({
       username: cfg.username ?? '',
       password: cfg.password ?? '',
@@ -130,8 +132,28 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
       }
     }
 
+    if (this.exposeSensors) {
+      this.startSensorPolling(shutters);
+    }
     if (this.enableReachability) {
       this.startReachabilityPolling(homeIds, handlers);
+    }
+  }
+
+  /** Ask each shutter for a fresh full reading now and on an interval (device op 62). */
+  private startSensorPolling(shutters: Shutter[]): void {
+    const poll = (): void => {
+      for (const s of shutters) {
+        this.client
+          .requestSensors({ id: s.id, homeId: s.homeId, roomId: s.roomId })
+          .catch((error) =>
+            this.log.debug(`Sensor request failed for ${s.name}: ${error.message}`),
+          );
+      }
+    };
+    poll();
+    if (this.sensorPollSeconds > 0) {
+      setInterval(poll, this.sensorPollSeconds * 1000).unref?.();
     }
   }
 

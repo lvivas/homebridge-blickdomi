@@ -13,6 +13,7 @@ function mockClient(): BlickdomiClient {
     close: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn().mockResolvedValue(undefined),
     setPosition: vi.fn().mockResolvedValue(undefined),
+    requestSensors: vi.fn().mockResolvedValue(undefined),
     subscribeState: vi.fn().mockResolvedValue(undefined),
     getReachability: vi.fn().mockResolvedValue(new Map()),
   };

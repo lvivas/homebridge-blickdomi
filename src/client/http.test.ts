@@ -185,6 +185,16 @@ describe('CloudBlickdomiClient', () => {
     ]);
   });
 
+  it('requests a sensor report with op 62', async () => {
+    const client = clientWith(withAuth(async () => json({})));
+
+    await client.requestSensors(ref);
+
+    expect(published).toEqual([
+      { topic: '1/AC1101200000AABBCCDDEEFFSOL/blind', payload: '{"op":62}' },
+    ]);
+  });
+
   it('inverts HomeKit position to the device percent-closed arg', async () => {
     const client = clientWith(withAuth(async () => json({})));
 

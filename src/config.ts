@@ -31,6 +31,8 @@ export interface BlickdomiPlatformConfig extends PlatformConfig {
   exposeHumidity?: boolean;
   /** °C added to every shutter's temperature (humidity corrected to match). */
   temperatureOffset?: number;
+  /** How often to request a fresh sensor reading (seconds; 0 = only at startup). */
+  sensorPollSeconds?: number;
   /** How often to poll window reachability (seconds). */
   reachabilityPollSeconds?: number;
   /** If > 0, treat a window offline when Last_Connection is this many minutes old. */

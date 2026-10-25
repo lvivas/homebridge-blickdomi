@@ -199,6 +199,10 @@ export class CloudBlickdomiClient implements BlickdomiClient {
     return this.publish(ref, { op: Op.BLIND_UNIT, args: toDeviceArgs(position) });
   }
 
+  requestSensors(ref: ShutterRef): Promise<void> {
+    return this.publish(ref, { op: Op.SENSORS });
+  }
+
   async subscribeState(
     homeId: number,
     onState: (windowId: string, readings: StateReadings) => void,

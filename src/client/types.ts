@@ -45,6 +45,8 @@ export interface BlickdomiClient {
   stop(ref: ShutterRef): Promise<void>;
   /** Move to a target position, 0 = closed … 100 = open (device op 63). */
   setPosition(ref: ShutterRef, position: number): Promise<void>;
+  /** Ask the device to publish a fresh full sensor report (device op 62). */
+  requestSensors(ref: ShutterRef): Promise<void>;
   /**
    * Subscribe to live position pushes for a home. The device only reports after
    * it finishes moving, so `onState` fires per settled position (HomeKit scale).
