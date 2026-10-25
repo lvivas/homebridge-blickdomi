@@ -24,6 +24,7 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
   private readonly enableReachability: boolean;
   private readonly reachabilityPollSeconds: number;
   private readonly deviceConfigs: DeviceConfig[];
+  private readonly globalTemperatureOffset: number;
 
   private readonly cachedAccessories: PlatformAccessory[] = [];
 
@@ -47,6 +48,7 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
     this.enableReachability = cfg.enableReachability ?? false;
     this.reachabilityPollSeconds = cfg.reachabilityPollSeconds ?? 180;
     this.deviceConfigs = cfg.devices ?? [];
+    this.globalTemperatureOffset = cfg.temperatureOffset ?? 0;
     this.client = new CloudBlickdomiClient({
       username: cfg.username ?? '',
       password: cfg.password ?? '',
@@ -64,8 +66,16 @@ export class BlickdomiPlatform implements DynamicPlatformPlugin {
 
   /** Per-device sensor override from config (by name or window id); undefined = auto. */
   sensorOverride(shutter: Shutter, kind: SensorKind): boolean | undefined {
-    const match = this.deviceConfigs.find((d) => d.name === shutter.name || d.name === shutter.id);
-    return match?.[kind];
+    return this.deviceConfig(shutter)?.[kind];
+  }
+
+  /** Temperature offset (°C) for a shutter: per-device if set, else the global value. */
+  temperatureOffsetFor(shutter: Shutter): number {
+    return this.deviceConfig(shutter)?.temperatureOffset ?? this.globalTemperatureOffset;
+  }
+
+  private deviceConfig(shutter: Shutter): DeviceConfig | undefined {
+    return this.deviceConfigs.find((d) => d.name === shutter.name || d.name === shutter.id);
   }
 
   configureAccessory(accessory: PlatformAccessory): void {

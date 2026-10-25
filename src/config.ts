@@ -8,6 +8,8 @@ export interface DeviceConfig {
   temperature?: boolean;
   humidity?: boolean;
   co2?: boolean;
+  /** °C added to the temperature reading; humidity is corrected to match. */
+  temperatureOffset?: number;
 }
 
 export type SensorKind = 'airQuality' | 'temperature' | 'humidity' | 'co2';
@@ -27,6 +29,8 @@ export interface BlickdomiPlatformConfig extends PlatformConfig {
   exposeCo2?: boolean;
   exposeTemperature?: boolean;
   exposeHumidity?: boolean;
+  /** °C added to every shutter's temperature (humidity corrected to match). */
+  temperatureOffset?: number;
   /** How often to poll window reachability (seconds). */
   reachabilityPollSeconds?: number;
   /** If > 0, treat a window offline when Last_Connection is this many minutes old. */

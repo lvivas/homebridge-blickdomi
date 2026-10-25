@@ -4,6 +4,7 @@ import type { BlickdomiPlatform } from './platform';
 import type { SensorKind } from './config';
 import type { Shutter, StateReadings } from './client/types';
 import { co2Detected, iaqToAirQuality } from './control/airquality';
+import { correctHumidity } from './control/humidity';
 import { ShutterController } from './control/shutterController';
 
 /** Binds one shutter's WindowCovering and its optional sensor services. */
@@ -15,6 +16,9 @@ export class ShutterAccessory {
   private tempService?: Service;
   private humService?: Service;
   private co2Service?: Service;
+  private readonly tempOffset: number;
+  /** Last raw temperature reading, used to correct humidity for the offset. */
+  private lastRawTempC?: number;
 
   constructor(
     private readonly platform: BlickdomiPlatform,
@@ -22,6 +26,7 @@ export class ShutterAccessory {
   ) {
     const { Service, Characteristic } = this.platform;
     const shutter = accessory.context.shutter as Shutter;
+    this.tempOffset = this.platform.temperatureOffsetFor(shutter);
 
     this.controller = new ShutterController({
       client: this.platform.client,
@@ -120,7 +125,8 @@ export class ShutterAccessory {
     // "No Response" for not-yet-seen metrics: a sensor in No Response alongside
     // the responding shutter makes HomeKit flap the whole accessory.
     const cache = this.readingCache();
-    for (const metric of Object.keys(cache) as (keyof StateReadings)[]) {
+    const order: (keyof StateReadings)[] = ['temperatureC', 'humidity', 'iaq', 'co2Ppm'];
+    for (const metric of order) {
       this.applyReading(metric, cache[metric]);
     }
 
@@ -165,19 +171,25 @@ export class ShutterAccessory {
     const { Characteristic } = this.platform;
     switch (metric) {
       case 'temperatureC':
+        this.lastRawTempC = value;
         if (!this.tempService) return;
         this.tempService.updateCharacteristic(
           Characteristic.CurrentTemperature,
-          Math.max(-270, Math.min(100, value)),
+          Math.max(-270, Math.min(100, value + this.tempOffset)),
         );
         break;
-      case 'humidity':
+      case 'humidity': {
         if (!this.humService) return;
+        const corrected =
+          this.lastRawTempC !== undefined
+            ? correctHumidity(value, this.lastRawTempC, this.tempOffset)
+            : value;
         this.humService.updateCharacteristic(
           Characteristic.CurrentRelativeHumidity,
-          Math.max(0, Math.min(100, value)),
+          Math.max(0, Math.min(100, corrected)),
         );
         break;
+      }
       case 'iaq':
         if (!this.airService) return;
         this.airService.updateCharacteristic(Characteristic.AirQuality, iaqToAirQuality(value));

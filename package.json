@@ -1,7 +1,7 @@
 {
   "name": "homebridge-blickdomi",
   "displayName": "Homebridge BlickDomi",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "Control BlickDomi Sentry window shutters (Solven) from HomeKit via the mySmartWindow cloud API.",
   "license": "MIT",
   "main": "dist/index.js",

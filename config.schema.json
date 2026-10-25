@@ -68,6 +68,12 @@
         "type": "boolean",
         "default": true
       },
+      "temperatureOffset": {
+        "title": "Temperature offset (°C)",
+        "description": "Added to the temperature reading to correct sensor self-heating (e.g. -3). Humidity is automatically corrected to match. Per-device overrides via 'devices'.",
+        "type": "number",
+        "default": 0
+      },
       "reachabilityPollSeconds": {
         "title": "Reachability poll interval (seconds)",
         "description": "How often to check whether each shutter is online (only when reachability is enabled).",

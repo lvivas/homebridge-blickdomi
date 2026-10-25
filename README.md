@@ -92,8 +92,15 @@ HomeKit flap the whole tile.
 Turn individual sensor types off globally with `exposeAirQuality`, `exposeCo2`,
 `exposeTemperature`, `exposeHumidity` (each default `true`) — e.g. the
 temperature/humidity readings are coarse, so you may want just CO₂ and air
-quality. `exposeSensors: false` disables all sensors. A `devices` entry (matched
-by name or window id) overrides everything for one shutter:
+quality. `exposeSensors: false` disables all sensors.
+
+The sensor sits in powered electronics and reads warm, so set
+`temperatureOffset` (°C, e.g. `-3`) to correct it; **humidity is auto-corrected**
+to match (same absolute humidity at the corrected temperature), so no separate
+humidity offset is needed.
+
+A `devices` entry (matched by name or window id) overrides any of these —
+including `temperatureOffset` — for one shutter:
 
 ```json
 "devices": [
